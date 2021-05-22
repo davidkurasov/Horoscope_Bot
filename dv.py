@@ -14,6 +14,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--token', dest='token', required=True, type=str)
     return parser.parse_args()
+
 args = parse_args()
 chat_id = "-1001154551109"
 zodiac_sign_dict = {'Aries': '1',
@@ -41,6 +42,23 @@ month_dict = { '1': 'January',
                '10': 'October',
                '11': 'November',
                '12': 'December' }
+
+zodiac_unic_dict = {'Aries': '\u2648\ufe0f',
+                    'Taurus': '\u2649\ufe0f',
+                    'Gemini': '\u264a\ufe0f',
+                    'Cancer': '\u264b\ufe0f',
+                    'Leo': '\u264c\ufe0f',
+                    'Virgo': '\u264d\ufe0f',
+                    'Libra': '\u264e\ufe0f',
+                    'Scorpio': '\u264f\ufe0f',
+                    'Sagittarius': '\u2650\ufe0f',
+                    'Capricorn': '\u2651\ufe0f',
+                    'Aquarius': '\u2652\ufe0f',
+                    'Pisces': '\u2653\ufe0f'}
+
+def get_unicode_zodiac(sign):
+    unicode = zodiac_unic_dict[sign]
+    return unicode
 
 def send_msg(msg, bot_token, chat_id):
     requests.get(f'https://api.telegram.org/bot{bot_token}/sendMessage?chat_id={chat_id}&text={msg}')
@@ -82,19 +100,25 @@ def parse_month(input):
 def print_horoscope(day, month):
     astro_sign = find_star_sign(day, month)
     zodiac_int = zodiac_sign_dict[astro_sign]
-    horoscope = requests.get(f"https://www.horoscope.com/us/horoscopes/general/horoscope-general-daily-today.aspx?sign={zodiac_int}").text
-    date_now = datetime.today().strftime("%B %d, %Y")
-    if date_now in horoscope:
-        start = f'<p><strong>{date_now}</strong> - '
-        end = '</p>'
-        print_horoscope = (horoscope.split(start))[1].split(end)[0]
-        return print_horoscope
-    else:
-        horoscope = requests.get(f"https://www.horoscope.com/us/horoscopes/general/horoscope-general-daily-tomorrow.aspx?sign={zodiac_int}").text
-        start = f'<p><strong>{date_now}</strong> - '
-        end = '</p>'
-        print_horoscope = (horoscope.split(start))[1].split(end)[0]
-        return print_horoscope
+    try:
+        horoscope = requests.get(f"https://www.horoscope.com/us/horoscopes/general/horoscope-general-daily-today.aspx?sign={zodiac_int}").text
+        date_now = datetime.today().strftime("%B %d, %Y")
+        if date_now in horoscope:
+            start = f'<p><strong>{date_now}</strong> - '
+            end = '</p>'
+            print_horoscope = (horoscope.split(start))[1].split(end)[0]
+            return print_horoscope
+        else:
+            try:
+                horoscope = requests.get(f"https://www.horoscope.com/us/horoscopes/general/horoscope-general-daily-tomorrow.aspx?sign={zodiac_int}").text
+                start = f'<p><strong>{date_now}</strong> - '
+                end = '</p>'
+                print_horoscope = (horoscope.split(start))[1].split(end)[0]
+                return print_horoscope
+            except Exception as e:
+                send_msg(e, args.token, chat_id)
+    except Exception as e:
+        send_msg(e, args.token, chat_id)
 
 def save_to_file(data):
     file = './horoscopes.json' 
@@ -128,7 +152,9 @@ def process_updates(updates):
                             day = int(stripped_d)
                             month = parse_month(stripped_m)
                             horoscope = print_horoscope(day, month)
-                            message = horoscope
+                            unicode = get_unicode_zodiac(find_star_sign(day, month))
+                            first_name = u['message']['from']['first_name']
+                            message = f"Dear {first_name}, today's horoscope for {unicode} is: \n \n{horoscope}"
                         send_msg(message, args.token, private_chat_id)
                 elif text == "/unsubscribe":
                     if re.match('^\/unsubscribe', text):
@@ -178,7 +204,8 @@ def process_updates(updates):
                                 print(bday_file_id, args.token, private_chat_id)
                                 send_animation(bday_file_id, args.token, private_chat_id)
                             else:
-                                message = f"{first_name}, you have been subscribed to our Daily Horoscope! To unsubscribe, please use /unsubscribe to silence our bot (don't do that please)"
+                                unicode = get_unicode_zodiac(find_star_sign(day, month))
+                                message = f"{first_name}, you have been subscribed to our Daily Horoscope for {unicode}! To unsubscribe, please use /unsubscribe to silence our bot (don't do that please)"
                                 save_to_file(data_dict)
                                 send_msg(message, args.token, private_chat_id) 
         elif 'channel_post' in u.keys() and 'animation' not in u['channel_post'].keys():
@@ -188,13 +215,17 @@ def process_updates(updates):
         else:
             continue
     
-json_initial_updates = requests.get('https://api.telegram.org/bot' + args.token + '/getUpdates').text
+try:
+    json_initial_updates = requests.get('https://api.telegram.org/bot' + args.token + '/getUpdates').text
+except Exception as e:
+    send_msg(e, args.token, chat_id)
+
+if not json_initial_updates:
+    exit
+
 initial_updates_raw = json.loads(json_initial_updates)
-
 initial_updates = initial_updates_raw['result']
-
 data_dict = read_from_file()
-
 process_updates(initial_updates)
 
 if len(initial_updates) == 0:
@@ -204,7 +235,12 @@ else:
 
 while True:
     newest_update = last_processed_update_id + 1
-    last_json = requests.get(f'https://api.telegram.org/bot{args.token}/getUpdates?offset={newest_update}').text
+    try:
+        last_json = requests.get(f'https://api.telegram.org/bot{args.token}/getUpdates?offset={newest_update}').text
+    except Exception as e:
+        send_msg(e, args.token, chat_id)
+    if not last_json:
+        break
     last = json.loads(last_json)
     if last.get('result', 0):
         updates = last['result']
@@ -213,9 +249,3 @@ while True:
     else:
         continue
     time.sleep(2)
-
-
-
-
-        
-
