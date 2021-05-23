@@ -3,8 +3,8 @@ import requests
 import json
 import re
 import time
-
 import argparse
+import schedule
 
 def parse_args():
     """
@@ -134,13 +134,17 @@ def read_from_file():
 def process_updates(updates):
     for u in updates:
         if 'message' in u.keys():
-            private_chat_id = u['message']['chat']['id']
-            print(private_chat_id)
+            private_chat_id = u['message']['from']['id']
             if 'entities' in u['message'].keys():
                 text = u['message']['text']
-                if text == "/help":
-                    message = "This is the help for DaVit Bot! You can sign up to a daily horoscope by sending '/subscribe dd.mm' or unsubscribe by sending /unsubscribe, or type /horoscope dd.mm to get your horoscope for today"
+                if text == "/help" or text == "/start" or text == "/help@HoroscopeDaily_bot":
+                    message = ("Welcome to the Daily Horoscope Bot!"
+                    "\n\n/subscribe dd.mm - to sign up to a daily horoscope, where dd is the day of birth, and mm is the month.\n"
+                    "/horoscope dd.mm - to get an instant horoscope for today.\n" 
+                    "/unsubscribe - to unsubscribe if you do not want to receive daily horoscopes any longer.")
                     send_msg(message, args.token, private_chat_id)
+                    animation = 'CgACAgIAAxkBAAMqYKpmzsBRcCJBEyuQOpVzv0ip6MAAAjIPAAJqMlhJpySq1pojPO8fBA'
+                    send_animation(animation, args.token, private_chat_id)
                 elif text.startswith("/horoscope"):
                     if re.match('^\/horoscope \d{1,2}.\d{1,2}$', text):
                         splitted = text.split('.')
@@ -156,19 +160,22 @@ def process_updates(updates):
                             first_name = u['message']['from']['first_name']
                             message = f"Dear {first_name}, today's horoscope for {unicode} is: \n \n{horoscope}"
                         send_msg(message, args.token, private_chat_id)
-                elif text == "/unsubscribe":
+                elif text == "/unsubscribe" or text == "/unsubscribe@HoroscopeDaily_bot":
                     if re.match('^\/unsubscribe', text):
                         username = u['message']['from']['username']
                         from_id = u['message']['from']['id']
                         first_name = u['message']['from']['first_name']
                         if data_dict.get(username, 0):
-                            data_dict[username] = {
-                                'birthday': data_dict[username]['birthday'],
-                                'from_id': from_id,
-                                'first_name': first_name,
-                                'subscribed': 'false' }
-                            message = "You have been unsubscribed :( feel free to resubscribe using /subscribe dd.mm, indicating your day and month of birth"
-                            save_to_file(data_dict)
+                            if data_dict[username]['subscribed'] == 'true':
+                                data_dict[username] = {
+                                    'birthday': data_dict[username]['birthday'],
+                                    'from_id': from_id,
+                                    'first_name': first_name,
+                                    'subscribed': 'false' }
+                                message = "You have been unsubscribed :( feel free to resubscribe using /subscribe dd.mm, indicating your day and month of birth"
+                                save_to_file(data_dict)
+                            else:
+                                message = 'You have already unsubscribed! Feel free to subscribe again using "/subscribe dd.mm"'
                         else:
                             message = "You have not subscribed yet! Please use /subscribe dd.mm, indicating your day and month of birth"
                         send_msg(message, args.token, private_chat_id)
@@ -200,8 +207,7 @@ def process_updates(updates):
                                 message = f"Happy Birthday {first_name}! You have been subscribed to our Daily Horoscope! To unsubscribe, please use /unsubscribe to silence our bot (don't do that please)"
                                 save_to_file(data_dict)
                                 send_msg(message, args.token, private_chat_id)
-                                bday_file_id = "CgACAgQAAxkBAAIBoGCmooTfaBZ04NtWdCFtgjeSOoAHAAIrAgACx5mVUmYStZD4uE5-HwQ"
-                                print(bday_file_id, args.token, private_chat_id)
+                                bday_file_id = "CgACAgQAAxkBAAN0YKrAErHbObMeIAO6sXI40VTJU9MAAisCAALHmZVS208xEjswK4gfBA"
                                 send_animation(bday_file_id, args.token, private_chat_id)
                             else:
                                 unicode = get_unicode_zodiac(find_star_sign(day, month))
@@ -214,6 +220,26 @@ def process_updates(updates):
             send_msg(message, args.token, chat_id)
         else:
             continue
+
+def scheduled_task(data_dict):
+    if len(data_dict.keys()) == 0:
+        data_dict = read_from_file()
+    else:
+        data_dict = data_dict
+    for user in data_dict:
+        if data_dict[user]['subscribed'] == 'true':
+            private_chat_id = data_dict[user]['from_id']
+            birthday = data_dict[user]['birthday']
+            first_name = data_dict[user]['first_name']
+            birthday_splitted = birthday.split('.')
+            zodiac = find_star_sign(int(birthday_splitted[0]), parse_month(birthday_splitted[1]))
+            unicode = get_unicode_zodiac(zodiac)
+            horoscope = print_horoscope(int(birthday_splitted[0]), parse_month(birthday_splitted[1]))
+            message = f"Hello {first_name}, this is your daily horoscope! \n \n{unicode} {horoscope}"
+            send_msg(message, args.token, private_chat_id)
+        else:
+            continue
+
     
 try:
     json_initial_updates = requests.get('https://api.telegram.org/bot' + args.token + '/getUpdates').text
@@ -233,7 +259,12 @@ if len(initial_updates) == 0:
 else:
     last_processed_update_id = initial_updates_raw['result'][-1]['update_id']
 
+schedule.every().day.at("11:00").do(scheduled_task, data_dict)
+
+
 while True:
+    time.sleep(2)
+    schedule.run_pending()
     newest_update = last_processed_update_id + 1
     try:
         last_json = requests.get(f'https://api.telegram.org/bot{args.token}/getUpdates?offset={newest_update}').text
@@ -248,4 +279,3 @@ while True:
         process_updates(updates)
     else:
         continue
-    time.sleep(2)
