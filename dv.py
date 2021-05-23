@@ -140,7 +140,7 @@ def process_updates(updates):
                 if text == "/help" or text == "/start" or text == "/help@HoroscopeDaily_bot":
                     message = ("Welcome to the Daily Horoscope Bot!"
                     "\n\n/subscribe dd.mm - to sign up to a daily horoscope, where dd is the day of birth, and mm is the month.\n"
-                    "/horoscope dd.mm - to get an instant horoscope for today.\n" 
+                    "/horoscope dd.mm - where dd is the day and mm the month of your birth, to get an instant horoscope for today.\n" 
                     "/unsubscribe - to unsubscribe if you do not want to receive daily horoscopes any longer.")
                     send_msg(message, args.token, private_chat_id)
                     animation = 'CgACAgIAAxkBAAMqYKpmzsBRcCJBEyuQOpVzv0ip6MAAAjIPAAJqMlhJpySq1pojPO8fBA'
