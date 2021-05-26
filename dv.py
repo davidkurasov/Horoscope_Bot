@@ -60,11 +60,16 @@ def get_unicode_zodiac(sign):
     unicode = zodiac_unic_dict[sign]
     return unicode
 
-def send_msg(msg, bot_token, chat_id):
+def admin_notification(msg, bot_token, chat_id):
     requests.get(f'https://api.telegram.org/bot{bot_token}/sendMessage?chat_id={chat_id}&text={msg}')
 
+def send_msg(msg, bot_token, chat_id):
+    send = requests.get(f'https://api.telegram.org/bot{bot_token}/sendMessage?chat_id={chat_id}&text={msg}')
+    return send
+
 def send_animation(msg, bot_token, chat_id):
-    requests.get(f'https://api.telegram.org/bot{bot_token}/sendAnimation?chat_id={chat_id}&animation={msg}')
+    send = requests.get(f'https://api.telegram.org/bot{bot_token}/sendAnimation?chat_id={chat_id}&animation={msg}')
+    return send
 
 def find_star_sign(day, month):
     if month == 'december':
@@ -131,27 +136,53 @@ def read_from_file():
         data_opened = json.load(f)
     return data_opened
 
+def validate_date(day, month):
+    if day == '' or month == '':
+        return 'Invalid'
+    else:
+        if int(month) < 1 or int(month) > 13:
+            return 'Invalid'   
+        else:
+            if int(month) in [2]:
+                if int(day) < 1 or int(day) > 29:
+                    return 'Invalid'
+                else:
+                    return 'Valid'
+            elif int(month) in [1,3,5,7,8,10,12]:
+                if int(day) < 1 or int(day) > 31:
+                    return 'Invalid'
+                else:
+                    return 'Valid'
+            else:
+                if int(day) < 1 or int(day) > 30:
+                    return 'Invalid'
+                else:
+                    return 'Valid'
+
 def process_updates(updates):
     for u in updates:
         if 'message' in u.keys():
             private_chat_id = u['message']['from']['id']
             if 'entities' in u['message'].keys():
                 text = u['message']['text']
-                if text == "/help" or text == "/start" or text == "/help@HoroscopeDaily_bot":
+                if text == "/help" or text == "/start" or text == "/help@HoroscopeDaily_bot" or text == "/start@HoroscopeDaily_bot":
                     message = ("Welcome to the Daily Horoscope Bot!"
                     "\n\n/subscribe dd.mm - to sign up to a daily horoscope, where dd is the day of birth, and mm is the month.\n"
                     "/horoscope dd.mm - where dd is the day and mm the month of your birth, to get an instant horoscope for today.\n" 
                     "/unsubscribe - to unsubscribe if you do not want to receive daily horoscopes any longer.")
-                    send_msg(message, args.token, private_chat_id)
+                    response = send_msg(message, args.token, private_chat_id)
+                    username = u['message']['from']['username']
+                    admin_notification(f'{username} help {str(response)}', args.token, chat_id)
                     animation = 'CgACAgIAAxkBAAMqYKpmzsBRcCJBEyuQOpVzv0ip6MAAAjIPAAJqMlhJpySq1pojPO8fBA'
-                    send_animation(animation, args.token, private_chat_id)
+                    response_animation = send_animation(animation, args.token, private_chat_id)
+                    admin_notification(response_animation, args.token, chat_id)
                 elif text.startswith("/horoscope"):
                     if re.match('^\/horoscope \d{1,2}.\d{1,2}$', text):
                         splitted = text.split('.')
                         stripped_m = splitted[1].lstrip('0')
                         stripped_d = splitted[0].split(' ')[1].lstrip('0')
-                        if int(stripped_d) > 31 or int(stripped_m) > 12:
-                            message = 'Invalid!'
+                        if validate_date(stripped_d,stripped_m) == 'Invalid':
+                            message = 'Invalid date!'
                         else:
                             day = int(stripped_d)
                             month = parse_month(stripped_m)
@@ -159,33 +190,39 @@ def process_updates(updates):
                             unicode = get_unicode_zodiac(find_star_sign(day, month))
                             first_name = u['message']['from']['first_name']
                             message = f"Dear {first_name}, today's horoscope for {unicode} is: \n \n{horoscope}"
-                        send_msg(message, args.token, private_chat_id)
+                        username = u['message']['from']['username']
+                        response = send_msg(message, args.token, private_chat_id)
+                        admin_notification(f'{username} horoscope {str(response)}', args.token, chat_id)
                 elif text == "/unsubscribe" or text == "/unsubscribe@HoroscopeDaily_bot":
                     if re.match('^\/unsubscribe', text):
                         username = u['message']['from']['username']
                         from_id = u['message']['from']['id']
                         first_name = u['message']['from']['first_name']
-                        if data_dict.get(username, 0):
+                        if username in data_dict.keys():
                             if data_dict[username]['subscribed'] == 'true':
                                 data_dict[username] = {
                                     'birthday': data_dict[username]['birthday'],
                                     'from_id': from_id,
                                     'first_name': first_name,
                                     'subscribed': 'false' }
-                                message = "You have been unsubscribed :( feel free to resubscribe using /subscribe dd.mm, indicating your day and month of birth"
+                                message = ("You have been unsubscribed :( feel free to resubscribe using /subscribe dd.mm, "
+                                "indicating your day and month of birth")
                                 save_to_file(data_dict)
                             else:
                                 message = 'You have already unsubscribed! Feel free to subscribe again using "/subscribe dd.mm"'
                         else:
                             message = "You have not subscribed yet! Please use /subscribe dd.mm, indicating your day and month of birth"
-                        send_msg(message, args.token, private_chat_id)
+                        response = send_msg(message, args.token, private_chat_id)
+                        admin_notification(f'{username} unsub {str(response)}', args.token, chat_id)
                 elif text.startswith("/subscribe"):
                     if re.match('^\/subscribe \d{1,2}.\d{1,2}$', text):
                         splitted = text.split('.')
                         stripped_m = splitted[1].lstrip('0')
                         stripped_d = splitted[0].split(' ')[1].lstrip('0')
-                        if int(stripped_d) > 31 or int(stripped_m) > 12:
-                            message = 'Invalid!'
+                        if validate_date(stripped_d,stripped_m) == 'Invalid':
+                            message = 'Invalid date!'
+                            response = send_msg(message, args.token, private_chat_id)
+                            admin_notification(response, args.token, chat_id)
                         else:
                             day = int(stripped_d)
                             month = parse_month(stripped_m)
@@ -204,16 +241,21 @@ def process_updates(updates):
                             stripped_d = date_splitted[0].lstrip('0')
                             date_stripped_splitted = stripped_d + '.' + stripped_m
                             if date_stripped_splitted == birthday:
-                                message = f"Happy Birthday {first_name}! You have been subscribed to our Daily Horoscope! To unsubscribe, please use /unsubscribe to silence our bot (don't do that please)"
+                                message = (f"Happy Birthday {first_name}! You have been subscribed to our Daily Horoscope! "
+                                "To unsubscribe, please use /unsubscribe to silence our bot (don't do that please)")
                                 save_to_file(data_dict)
-                                send_msg(message, args.token, private_chat_id)
+                                response = send_msg(message, args.token, private_chat_id)
+                                admin_notification(response, args.token, chat_id)
                                 bday_file_id = "CgACAgQAAxkBAAN0YKrAErHbObMeIAO6sXI40VTJU9MAAisCAALHmZVS208xEjswK4gfBA"
-                                send_animation(bday_file_id, args.token, private_chat_id)
+                                response_animation = send_animation(bday_file_id, args.token, private_chat_id)
+                                admin_notification(response_animation, args.token, chat_id)
                             else:
                                 unicode = get_unicode_zodiac(find_star_sign(day, month))
-                                message = f"{first_name}, you have been subscribed to our Daily Horoscope for {unicode}! To unsubscribe, please use /unsubscribe to silence our bot (don't do that please)"
+                                message = (f"{first_name}, you have been subscribed to our Daily Horoscope for {unicode}! "
+                                "To unsubscribe, please use /unsubscribe to silence our bot (don't do that please)")
                                 save_to_file(data_dict)
-                                send_msg(message, args.token, private_chat_id) 
+                                response = send_msg(message, args.token, private_chat_id) 
+                                admin_notification(response, args.token, chat_id)
         elif 'channel_post' in u.keys() and 'animation' not in u['channel_post'].keys():
             text = u['channel_post']['text']
             message = f'Somebody wrote: {text}'
@@ -236,7 +278,8 @@ def scheduled_task(data_dict):
             unicode = get_unicode_zodiac(zodiac)
             horoscope = print_horoscope(int(birthday_splitted[0]), parse_month(birthday_splitted[1]))
             message = f"Hello {first_name}, this is your daily horoscope! \n \n{unicode} {horoscope}"
-            send_msg(message, args.token, private_chat_id)
+            response = send_msg(message, args.token, private_chat_id)
+            admin_notification(response, args.token, chat_id)
         else:
             continue
 
