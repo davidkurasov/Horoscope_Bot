@@ -6,17 +6,9 @@ import time
 import argparse
 import schedule
 
-def parse_args():
-    """
-    Parses arguments from command line
-    :return: Namespace of parsed params
-    """
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--token', dest='token', required=True, type=str)
-    return parser.parse_args()
-
-args = parse_args()
+#dictionaries and variables
 chat_id = "-1001154551109"
+
 zodiac_sign_dict = {'Aries': '1',
                     'Taurus': '2',
                     'Gemini': '3',
@@ -55,6 +47,8 @@ zodiac_unic_dict = {'Aries': '\u2648\ufe0f',
                     'Capricorn': '\u2651\ufe0f',
                     'Aquarius': '\u2652\ufe0f',
                     'Pisces': '\u2653\ufe0f'}
+
+# functions
 
 def get_unicode_zodiac(sign):
     unicode = zodiac_unic_dict[sign]
@@ -198,7 +192,7 @@ def process_updates(updates):
                         username = u['message']['from']['username']
                         from_id = u['message']['from']['id']
                         first_name = u['message']['from']['first_name']
-                        if username in data_dict.keys():
+                        if data_dict.get(username, 0):
                             if data_dict[username]['subscribed'] == 'true':
                                 data_dict[username] = {
                                     'birthday': data_dict[username]['birthday'],
@@ -274,20 +268,43 @@ def scheduled_task(data_dict):
             birthday = data_dict[user]['birthday']
             first_name = data_dict[user]['first_name']
             birthday_splitted = birthday.split('.')
+            date_short = datetime.now().strftime("%d.%m")
+            date_splitted = date_short.split('.')
+            stripped_m = date_splitted[1].lstrip('0')
+            stripped_d = date_splitted[0].lstrip('0')
+            date_stripped_splitted = stripped_d + '.' + stripped_m
             zodiac = find_star_sign(int(birthday_splitted[0]), parse_month(birthday_splitted[1]))
             unicode = get_unicode_zodiac(zodiac)
             horoscope = print_horoscope(int(birthday_splitted[0]), parse_month(birthday_splitted[1]))
-            message = f"Hello {first_name}, this is your daily horoscope! \n \n{unicode} {horoscope}"
+            if date_stripped_splitted == birthday:
+                message = f"Happy Birthday {first_name}! Here is your horoscope on this amazing Happy day: \n \n{unicode} {horoscope}"
+                bday_file_id = "CgACAgQAAxkBAAN0YKrAErHbObMeIAO6sXI40VTJU9MAAisCAALHmZVS208xEjswK4gfBA"
+                response_animation = send_animation(bday_file_id, args.token, private_chat_id)
+                admin_notification(response_animation, args.token, chat_id)
+            else:
+                message = f"Hello {first_name}, this is your daily horoscope! \n \n{unicode} {horoscope}"
             response = send_msg(message, args.token, private_chat_id)
             admin_notification(response, args.token, chat_id)
         else:
             continue
 
+def parse_args():
+    """
+    Parses arguments from command line
+    :return: Namespace of parsed params
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--token', dest='token', required=True, type=str)
+    return parser.parse_args()
+
+# main code
+
+args = parse_args()
     
 try:
     json_initial_updates = requests.get('https://api.telegram.org/bot' + args.token + '/getUpdates').text
 except Exception as e:
-    send_msg(e, args.token, chat_id)
+    admin_notification(e, args.token, chat_id)
 
 if not json_initial_updates:
     exit
@@ -303,7 +320,6 @@ else:
     last_processed_update_id = initial_updates_raw['result'][-1]['update_id']
 
 schedule.every().day.at("11:00").do(scheduled_task, data_dict)
-
 
 while True:
     time.sleep(2)
