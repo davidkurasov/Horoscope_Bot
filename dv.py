@@ -338,7 +338,7 @@ if len(initial_updates) == 0:
 else:
     last_processed_update_id = initial_updates_raw['result'][-1]['update_id']
 
-schedule.every().day.at("21:40").do(scheduled_task, data_dict)
+schedule.every().day.at("11:00").do(scheduled_task, data_dict)
 
 while True:
     time.sleep(1)
