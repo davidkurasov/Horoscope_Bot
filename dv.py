@@ -89,7 +89,7 @@ def print_horoscope(day, month):
     zodiac_int = zodiac_sign_dict[astro_sign]
     try:
         horoscope = requests.get(f"https://www.horoscope.com/us/horoscopes/general/horoscope-general-daily-today.aspx?sign={zodiac_int}").text
-        date_now = datetime.today().strftime("%b %d, %Y")
+        date_now = datetime.today().strftime("%b %-d, %Y")
         if date_now in horoscope:
             start = f'<p><strong>{date_now}</strong> - '
             end = '</p>'
@@ -152,7 +152,11 @@ def process_updates(updates):
         if 'message' in u.keys():
             text = u['message']['text']
             private_chat_id = u['message']['from']['id']
-            username = u['message']['from']['username']
+            first_name = u['message']['from']['first_name']
+            if u['message']['from'].get('username',0):
+                username = u['message']['from']['username']
+            else:
+                username = first_name
             if 'entities' in u['message'].keys():
                 if text == "/help" or text == "/start" or text == "/help@HoroscopeDaily_bot" or text == "/start@HoroscopeDaily_bot":
                     update_help(username, text, private_chat_id)
@@ -178,9 +182,6 @@ def process_updates(updates):
                     month = saved_data[username]['month']
                     birthday = "{} {}".format(month, day)
                     date = datetime.today().strftime("%b %d")
-                    username = u['message']['from']['username']
-                    from_id = u['message']['from']['id']
-                    first_name = u['message']['from']['first_name']
                     zodiac = find_star_sign(day, month)
                     unicode = get_unicode_zodiac(zodiac)
                     horoscope = print_horoscope(day, month)
@@ -202,7 +203,7 @@ def process_updates(updates):
                     else:
                         data_dict[username] = {
                             'birthday': birthday,
-                            'from_id': from_id,
+                            'from_id': private_chat_id,
                             'first_name': first_name,
                             'subscribed': 'true' }
                         if date == birthday:
@@ -338,7 +339,7 @@ if len(initial_updates) == 0:
 else:
     last_processed_update_id = initial_updates_raw['result'][-1]['update_id']
 
-schedule.every().day.at("11:00").do(scheduled_task, data_dict)
+schedule.every().day.at("02:00").do(scheduled_task, data_dict)
 
 while True:
     time.sleep(1)
