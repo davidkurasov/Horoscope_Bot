@@ -5,6 +5,7 @@ import re
 import time
 import argparse
 import schedule
+import random
 
 #dictionaries and variables
 chat_id = "-1001154551109"
@@ -38,6 +39,7 @@ zodiac_unic_dict = {'Aries': '\u2648\ufe0f',
 months = ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
 
 saved_data = {}
+log_path = './logs.txt'
 
 # functions
 
@@ -46,15 +48,33 @@ def get_unicode_zodiac(sign):
     return unicode
 
 def admin_notification(msg, bot_token, chat_id):
-    requests.get(f'https://api.telegram.org/bot{bot_token}/sendMessage?chat_id={chat_id}&text={msg}')
+    try:
+        requests.get(f'https://api.telegram.org/bot{bot_token}/sendMessage?chat_id={chat_id}&text={msg}')
+    except Exception as e:
+        with open(log_path,'a') as log_file:
+            log_file.write(f'Error while sending admin notification {e}\n')
+            log_file.close()
+        
 
 def send_msg(msg, bot_token, chat_id):
-    send = requests.get(f'https://api.telegram.org/bot{bot_token}/sendMessage?chat_id={chat_id}&text={msg}')
-    return send
+    try:
+        send = requests.get(f'https://api.telegram.org/bot{bot_token}/sendMessage?chat_id={chat_id}&text={msg}')
+    except Exception as e:
+        with open(log_path,'a') as log_file:
+            log_file.write(f'Error while sending message - {e}\n')
+            log_file.close()
+    if send:
+        return send
 
 def send_animation(msg, bot_token, chat_id):
-    send = requests.get(f'https://api.telegram.org/bot{bot_token}/sendAnimation?chat_id={chat_id}&animation={msg}')
-    return send
+    try:
+        send = requests.get(f'https://api.telegram.org/bot{bot_token}/sendAnimation?chat_id={chat_id}&animation={msg}')
+    except Exception as e:
+        with open(log_path,'a') as log_file:
+            log_file.write(f'Error while sending animation - {e}\n')
+            log_file.close()
+    if send:
+        return send
 
 def find_star_sign(day, month):
     day = int(day)
@@ -88,7 +108,16 @@ def print_horoscope(day, month):
     astro_sign = find_star_sign(day, month)
     zodiac_int = zodiac_sign_dict[astro_sign]
     try:
-        horoscope = requests.get(f"https://www.horoscope.com/us/horoscopes/general/horoscope-general-daily-today.aspx?sign={zodiac_int}").text
+        header_list = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0", 
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 11_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 10; SM-N975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36 OPR/63.3.3216.58675",
+        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0"]
+        header = {'user-agent': random.choice(header_list)}
+        horo_url = f"https://www.horoscope.com/us/horoscopes/general/horoscope-general-daily-today.aspx?sign={zodiac_int}" 
+        horoscope = requests.get(horo_url, headers = header).text  
         date_now = datetime.today().strftime("%b %-d, %Y")
         if date_now in horoscope:
             start = f'<p><strong>{date_now}</strong> - '
@@ -137,19 +166,21 @@ def update_unsubscribe(u, private_chat_id):
                 'from_id': from_id,
                 'first_name': first_name,
                 'subscribed': 'false' }
-            message = ("You have been unsubscribed :( feel free to resubscribe using /subscribe dd.mm, "
+            message = ("You have been unsubscribed :( feel free to resubscribe using /subscribe, "
             "indicating your day and month of birth")
             save_to_file(data_dict)
         else:
-            message = 'You have already unsubscribed! Feel free to subscribe again using "/subscribe dd.mm"'
+            message = 'You have already unsubscribed! Feel free to subscribe again using "/subscribe"'
     else:
-        message = "You have not subscribed yet! Please use /subscribe dd.mm, indicating your day and month of birth"
+        message = "You have not subscribed yet! Please use /subscribe, indicating your day and month of birth"
     response = send_msg(message, args.token, private_chat_id)
     admin_notification(f'{username} unsub {str(response)}', args.token, chat_id)
 
 def process_updates(updates):
     for u in updates:
         if 'message' in u.keys():
+            if not u['message'].get('text',0):
+                continue
             text = u['message']['text']
             private_chat_id = u['message']['from']['id']
             first_name = u['message']['from']['first_name']
@@ -221,11 +252,9 @@ def process_updates(updates):
                             "To unsubscribe, please use /unsubscribe to silence our bot (don't do that please)")
                             save_to_file(data_dict)
                             response = send_msg(message, args.token, private_chat_id) 
-                            admin_notification(f'{username} {text} {response}', args.token, chat_id)
+                            admin_notification(f'subscriber! {username} {text} {response}', args.token, chat_id)
         elif 'channel_post' in u.keys() and 'animation' not in u['channel_post'].keys():
-            text = u['channel_post']['text']
-            message = f'Somebody wrote: {text}'
-            send_msg(message, args.token, chat_id)
+            pass
         else:
             pass
 
